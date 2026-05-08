@@ -1,0 +1,30 @@
+{
+  "name": "agent-escrow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent-enforced rule-based autonomous settlement on Solana",
+  "scripts": {
+    "test": "anchor test",
+    "test:anchor": "ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts",
+    "buyer-agent": "tsx scripts/buyer-agent.ts",
+    "verifier-agent": "tsx scripts/verifier-agent.ts",
+    "keeper-agent": "tsx scripts/keeper-agent.ts"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.32.1",
+    "@solana/spl-token": "0.4.14",
+    "@solana/web3.js": "1.98.4",
+    "dotenv": "17.2.3",
+    "tsx": "4.21.0"
+  },
+  "devDependencies": {
+    "@types/chai": "5.2.3",
+    "@types/bn.js": "5.2.0",
+    "@types/mocha": "10.0.10",
+    "@types/node": "25.6.0",
+    "chai": "6.2.2",
+    "mocha": "11.7.5",
+    "ts-mocha": "11.1.0",
+    "typescript": "6.0.3"
+  }
+}
