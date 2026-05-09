@@ -9,7 +9,7 @@ skip-lint = false
 agent_escrow = "EGdjBD33dZjnUGZyFVAwj2qgjQGr59Z4U6vFRQNqzjsD"
 
 [programs.localnet]
-agent_escrow = "EGdjBD33dZjnUGZyFVAwj2qgjQGr59Z4U6vFRQNqzjsD"
+agent_escrow = "7kfKBa2vkXHsjMSDz1qJvzTHWHMXEncyCgQBmFZphZgW"
 
 [registry]
 url = "https://api.apr.dev"

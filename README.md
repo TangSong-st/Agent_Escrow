@@ -78,6 +78,7 @@ anchor test
 
 4. Start the frontend:
 
+在`app/src/idl/agent_escrow.json` 中把address更改为部署地址
 ```bash
 cd app
 npm install
