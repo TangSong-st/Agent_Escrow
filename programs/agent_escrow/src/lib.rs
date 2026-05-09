@@ -3,7 +3,7 @@ use anchor_lang::AccountDeserialize;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{self, CloseAccount, Mint, Token, TokenAccount, TransferChecked};
 
-declare_id!("57BUJreQSofWxLxi5y7hSPbh47puKqgNH3o1FCxAQrJ7");
+declare_id!("EGdjBD33dZjnUGZyFVAwj2qgjQGr59Z4U6vFRQNqzjsD");
 
 const ESCROW_SEED_PREFIX: &[u8] = b"escrow";
 

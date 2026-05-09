@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-agent_escrow = "57BUJreQSofWxLxi5y7hSPbh47puKqgNH3o1FCxAQrJ7"
+agent_escrow = "EGdjBD33dZjnUGZyFVAwj2qgjQGr59Z4U6vFRQNqzjsD"
 
 [programs.localnet]
-agent_escrow = "57BUJreQSofWxLxi5y7hSPbh47puKqgNH3o1FCxAQrJ7"
+agent_escrow = "EGdjBD33dZjnUGZyFVAwj2qgjQGr59Z4U6vFRQNqzjsD"
 
 [registry]
 url = "https://api.apr.dev"

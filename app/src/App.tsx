@@ -61,6 +61,10 @@ function deriveExecutionHint(confirmed: boolean, executed: boolean, deadline: bi
   return "NotReady: waiting for verifier confirmation or deadline expiry.";
 }
 
+function shortAddress(address: string): string {
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -424,7 +428,26 @@ export function App(): ReactElement {
   }
 
   async function handleConfirm(): Promise<void> {
-    if (wallet.publicKey === null || anchorWallet === undefined || currentEscrow === null) {
+    if (currentEscrow === null) {
+      setMessage("Load an escrow first, then confirm it with the configured verifier wallet.");
+      return;
+    }
+    if (wallet.publicKey === null) {
+      setMessage("Connect the verifier wallet first.");
+      return;
+    }
+    if (anchorWallet === undefined) {
+      setMessage("The connected wallet does not expose an Anchor-compatible signer. Reconnect the wallet and try again.");
+      return;
+    }
+    if (wallet.publicKey.toBase58() !== currentEscrow.verifier) {
+      setMessage(
+        `Current wallet ${wallet.publicKey.toBase58()} is not the configured verifier for this escrow. Chain verifier is ${currentEscrow.verifier}.`,
+      );
+      return;
+    }
+    if (currentEscrow.executed) {
+      setMessage("This escrow has already been executed.");
       return;
     }
     const program = getProgram(connection, anchorWallet);
@@ -591,19 +614,13 @@ export function App(): ReactElement {
     }
   }
 
-  const canConfirm =
-    currentEscrow !== null &&
-    wallet.publicKey !== null &&
-    wallet.publicKey.toBase58() === currentEscrow.verifier &&
-    !currentEscrow.executed;
-
   const confirmHint =
     currentEscrow === null
       ? "Load an escrow first."
       : wallet.publicKey === null
         ? "Connect the verifier wallet to confirm."
         : wallet.publicKey.toBase58() !== currentEscrow.verifier
-          ? "Current wallet is not the configured verifier."
+          ? `Wallet ${shortAddress(wallet.publicKey.toBase58())} does not match verifier ${shortAddress(currentEscrow.verifier)}.`
           : currentEscrow.executed
             ? "This escrow is already executed."
             : "Verifier wallet is authorized to confirm.";
@@ -780,7 +797,7 @@ export function App(): ReactElement {
       </section>
 
       <section className="action-row">
-        <ConfirmButton disabled={loadingAction === "confirm"} canConfirm={canConfirm} hint={confirmHint} onClick={handleConfirm} />
+        <ConfirmButton disabled={loadingAction === "confirm"} hint={confirmHint} onClick={handleConfirm} />
         <ExecuteButton disabled={loadingAction === "execute" || currentEscrow === null} hint={executeHint} onClick={handleExecute} />
       </section>
     </main>

@@ -8,8 +8,6 @@ import type { AgentEscrow } from "../../../target/types/agent_escrow";
 
 const idl = idlJson as AgentEscrow;
 
-const LOCALNET_PROGRAM_ID = "57BUJreQSofWxLxi5y7hSPbh47puKqgNH3o1FCxAQrJ7";
-
 export function isLocalnetEndpoint(endpoint: string): boolean {
   return endpoint.includes("127.0.0.1") || endpoint.includes("localhost");
 }
@@ -20,7 +18,7 @@ export function getProgramId(connection: Connection): PublicKey {
     return new PublicKey(configuredProgramId);
   }
 
-  return new PublicKey(isLocalnetEndpoint(connection.rpcEndpoint) ? LOCALNET_PROGRAM_ID : idlJson.address);
+  return new PublicKey(idlJson.address);
 }
 
 export const TOKEN_PROGRAM = TOKEN_PROGRAM_ID;
