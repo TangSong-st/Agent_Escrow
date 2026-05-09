@@ -5,17 +5,17 @@ package_manager = "npm"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-agent_escrow = "3MXAtw3MNR6z2xYXwTU9zxibYL5pyiEtFjZ7Bevq5PZr"
-
 [programs.devnet]
-agent_escrow = "3MXAtw3MNR6z2xYXwTU9zxibYL5pyiEtFjZ7Bevq5PZr"
+agent_escrow = "57BUJreQSofWxLxi5y7hSPbh47puKqgNH3o1FCxAQrJ7"
+
+[programs.localnet]
+agent_escrow = "57BUJreQSofWxLxi5y7hSPbh47puKqgNH3o1FCxAQrJ7"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
@@ -23,3 +23,5 @@ test = "npx ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
 
 [test]
 startup_wait = 10000
+shutdown_wait = 2000
+upgradeable = false

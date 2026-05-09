@@ -3,8 +3,8 @@ import { BN } from "@coral-xyz/anchor";
 import { useAnchorWallet, useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
-import { getProgram, getReadonlyProgram, PROGRAM_ID } from "./lib/anchor";
+import { Keypair, PublicKey, SendTransactionError, Transaction, type Connection } from "@solana/web3.js";
+import { getProgram, getProgramId, getReadonlyProgram, isLocalnetEndpoint } from "./lib/anchor";
 import { findEscrowPda, findVaultAddress } from "./lib/pda";
 import {
   buildCreateMintTransaction,
@@ -65,10 +65,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function formatUiError(error: unknown, isLocalnet: boolean): string {
+function formatUiError(error: unknown, isLocalnet: boolean, programId: PublicKey): string {
   const fallback = error instanceof Error ? error.message : String(error);
   const errorName = error instanceof Error ? error.name : "";
   const normalized = fallback.toLowerCase();
+
+  if (
+    normalized.includes("attempt to load a program that does not exist") ||
+    normalized.includes("program account not found") ||
+    normalized.includes("does not exist on the current")
+  ) {
+    return `Escrow program ${programId.toBase58()} does not exist on the current ${
+      isLocalnet ? "localnet" : "devnet"
+    } RPC. Deploy that program to this cluster or switch the frontend RPC/program id.`;
+  }
 
   if (errorName.includes("WalletSignTransactionError") || errorName.includes("WalletSendTransactionError")) {
     if (isLocalnet) {
@@ -109,6 +119,34 @@ function formatUiError(error: unknown, isLocalnet: boolean): string {
   return fallback;
 }
 
+async function assertProgramDeployed(connection: Connection, programId: PublicKey, isLocalnet: boolean): Promise<void> {
+  const programAccount = await connection.getAccountInfo(programId, "confirmed");
+  if (programAccount === null) {
+    throw new Error(
+      `Escrow program ${programId.toBase58()} does not exist on the current ${
+        isLocalnet ? "localnet" : "devnet"
+      } RPC.`,
+    );
+  }
+}
+
+async function enrichSendTransactionError(error: unknown, connection: Connection): Promise<never> {
+  if (error instanceof SendTransactionError) {
+    let logs: string[] = [];
+    try {
+      logs = await error.getLogs(connection);
+    } catch {
+      logs = [];
+    }
+
+    if (logs.length > 0) {
+      throw new Error(`${error.message}\nFull logs:\n${logs.join("\n")}`);
+    }
+  }
+
+  throw error;
+}
+
 export function App(): ReactElement {
   const { connection } = useConnection();
   const wallet = useWallet();
@@ -129,8 +167,9 @@ export function App(): ReactElement {
   const [recentEscrows, setRecentEscrows] = useState<RecentEscrowItem[]>([]);
 
   const rpcEndpoint = connection.rpcEndpoint;
-  const isLocalnet = rpcEndpoint.includes("127.0.0.1") || rpcEndpoint.includes("localhost");
+  const isLocalnet = isLocalnetEndpoint(rpcEndpoint);
   const networkLabel = isLocalnet ? "localnet" : "devnet";
+  const programId = getProgramId(connection);
   const recentEscrowsStorageKey = `agent-escrow-recent-${networkLabel}`;
 
   useEffect(() => {
@@ -179,7 +218,9 @@ export function App(): ReactElement {
     setTransactionStage(labels?.awaitingApproval ?? "Waiting for wallet approval...");
     const signedTransaction = await wallet.signTransaction(transaction);
     setTransactionStage(labels?.submitting ?? "Submitting transaction...");
-    const signatureValue = await connection.sendRawTransaction(signedTransaction.serialize());
+    const signatureValue = await connection
+      .sendRawTransaction(signedTransaction.serialize())
+      .catch((error: unknown) => enrichSendTransactionError(error, connection));
     setTransactionStage(labels?.confirming ?? "Waiting for on-chain confirmation...");
     await connection.confirmTransaction(
       {
@@ -247,7 +288,7 @@ export function App(): ReactElement {
       setMessage("Airdropped 2 SOL to the connected localnet wallet.");
       await refreshSolBalance();
     } catch (error: unknown) {
-      setMessage(formatUiError(error, isLocalnet));
+      setMessage(formatUiError(error, isLocalnet, programId));
     } finally {
       setTransactionStage(null);
       setLoadingAction(null);
@@ -263,6 +304,7 @@ export function App(): ReactElement {
     setSignature(null);
     try {
       const escrowPda = new PublicKey(pda);
+      await assertProgramDeployed(connection, programId, isLocalnet);
       const account = await program.account.escrow.fetch(escrowPda);
       const mintDecimals = await getMintDecimals(connection, account.mint);
       const vault = findVaultAddress(escrowPda, account.mint);
@@ -301,7 +343,7 @@ export function App(): ReactElement {
       });
       setMessage("Escrow state loaded.");
     } catch (error: unknown) {
-      setMessage(formatUiError(error, isLocalnet));
+      setMessage(formatUiError(error, isLocalnet, programId));
     } finally {
       setLoadingAction(null);
     }
@@ -333,7 +375,8 @@ export function App(): ReactElement {
       const seed = BigInt(input.seed);
       const amount = parseTokenAmount(input.amount, mintDecimals);
       const deadlineTimestamp = BigInt(Math.floor(new Date(input.deadline).getTime() / 1000));
-      const [escrowPda] = findEscrowPda(seed, wallet.publicKey, PROGRAM_ID);
+      await assertProgramDeployed(connection, programId, isLocalnet);
+      const [escrowPda] = findEscrowPda(seed, wallet.publicKey, programId);
       const createMakerAta = await getOrCreateAtaInstruction(connection, wallet.publicKey, mint, wallet.publicKey);
 
       if (createMakerAta.instruction !== null) {
@@ -373,7 +416,7 @@ export function App(): ReactElement {
       await refreshBalance(mint.toBase58());
       await loadEscrowState(escrowPda.toBase58());
     } catch (error: unknown) {
-      setMessage(formatUiError(error, isLocalnet));
+      setMessage(formatUiError(error, isLocalnet, programId));
     } finally {
       setTransactionStage(null);
       setLoadingAction(null);
@@ -390,6 +433,7 @@ export function App(): ReactElement {
     setMessage(null);
     setSignature(null);
     try {
+      await assertProgramDeployed(connection, programId, isLocalnet);
       const transaction = await program.methods
         .confirmDelivery()
         .accountsPartial({
@@ -406,7 +450,7 @@ export function App(): ReactElement {
       setMessage("Delivery confirmed.");
       await loadEscrowState(currentEscrow.escrowPda);
     } catch (error: unknown) {
-      setMessage(formatUiError(error, isLocalnet));
+      setMessage(formatUiError(error, isLocalnet, programId));
     } finally {
       setTransactionStage(null);
       setLoadingAction(null);
@@ -423,6 +467,7 @@ export function App(): ReactElement {
     setMessage(null);
     setSignature(null);
     try {
+      await assertProgramDeployed(connection, programId, isLocalnet);
       const escrow = await program.account.escrow.fetch(new PublicKey(currentEscrow.escrowPda));
       const deadline = BigInt(escrow.deadline.toString());
       const status = deriveStatus(escrow.confirmed, escrow.executed, deadline);
@@ -477,7 +522,7 @@ export function App(): ReactElement {
       setMessage(escrow.confirmed ? "Settlement released to the receiver." : "Settlement refunded to the maker.");
       await loadEscrowState(currentEscrow.escrowPda);
     } catch (error: unknown) {
-      setMessage(formatUiError(error, isLocalnet));
+      setMessage(formatUiError(error, isLocalnet, programId));
     } finally {
       setTransactionStage(null);
       setLoadingAction(null);
@@ -506,7 +551,7 @@ export function App(): ReactElement {
       setMessage(`Dev mint created: ${mint.publicKey.toBase58()}`);
       await refreshBalance(mint.publicKey.toBase58());
     } catch (error: unknown) {
-      setMessage(formatUiError(error, isLocalnet));
+      setMessage(formatUiError(error, isLocalnet, programId));
     } finally {
       setLoadingAction(null);
     }
@@ -539,7 +584,7 @@ export function App(): ReactElement {
       setMessage("Test tokens minted to current wallet.");
       await refreshBalance();
     } catch (error: unknown) {
-      setMessage(formatUiError(error, isLocalnet));
+      setMessage(formatUiError(error, isLocalnet, programId));
     } finally {
       setTransactionStage(null);
       setLoadingAction(null);
@@ -664,11 +709,12 @@ export function App(): ReactElement {
         </div>
         <div className="hero-side">
           <WalletMultiButton />
-        <div className="wallet-meta">
-          <span>Network: {networkLabel}</span>
-          <span>Wallet: {wallet.publicKey?.toBase58() ?? "Not connected"}</span>
-          <span>{wallet.publicKey === null ? "Connect wallet to transact." : "Wallet connected and ready for signing."}</span>
-        </div>
+          <div className="wallet-meta">
+            <span>Network: {networkLabel}</span>
+            <span>Program: {programId.toBase58()}</span>
+            <span>Wallet: {wallet.publicKey?.toBase58() ?? "Not connected"}</span>
+            <span>{wallet.publicKey === null ? "Connect wallet to transact." : "Wallet connected and ready for signing."}</span>
+          </div>
         </div>
       </section>
 
